@@ -1,0 +1,4 @@
+# config of application
+app:
+  name: myapi
+  http_addr: :8888
