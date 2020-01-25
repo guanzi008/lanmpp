@@ -1,47 +1,96 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
+	"log"
+	"net"
 	"os"
+	"strings"
+	"time"
 )
 
-//定义一个字符串变量，并制定默认值以及使用方式
-var a = flag.String("domain", "1q.tn", "域名whois查询")
-
-//定义一个int型字符
-//var b  = flag.Int("ins", 1, "ins nums")
-
 func main() {
-	// 上面定义了两个简单的参数，在所有参数定义生效前，需要使用flag.Parse()来解析参数
+	var srcHost, agencyHost string
+	flag.StringVar(&srcHost, "srcHost", "", "srcHost")
+	flag.StringVar(&agencyHost, "agencyHost", "", "agencyHost")
 	flag.Parse()
-	client := &http.Client{}
-	// 测试上面定义的函数
-	//	api := "odata.cc"
-	url := string(*a)
-
-	//提交请求
-	reqest, err := http.NewRequest("GET", "http://whois.aite.xyz/?ajax&client&domain="+url, nil)
-	//reqest, err := http.Get("http://whois.aite.xyz/?ajax&client&domain="+url,b)
-
-	if err != nil {
-		panic(err)
+	if srcHost == "" || agencyHost == "" {
+		fmt.Fprintf(os.Stderr, "Fatal error: %s", "参数为空")
+		os.Exit(1)
 	}
+	//建立socket，监听端口
+	netListen, err := net.Listen("tcp", srcHost)
+	CheckError(err)
+	defer netListen.Close()
 
-	//处理返回结果
-	response, _ := client.Do(reqest)
+	Log("Waiting for clients")
+	for {
+		conn, err := netListen.Accept()
+		//如果没有请求就一直等待
+		if err != nil {
+			continue
+		}
+		if conn != nil {
+			Log(conn.RemoteAddr().String(), " tcp connect success")
+			go handleConnection(conn, agencyHost) //go 可以实现异步并发请求
+		}
+	}
+}
 
-	//将结果定位到标准输出 也可以直接打印出来 或者定位到其他地方进行相应的处理
-	stdout := os.Stdout
-	_, err = io.Copy(stdout, response.Body)
+//处理连接
+func handleConnection(conn net.Conn, agencyHost string) {
+	time.Sleep(10 * time.Millisecond)
+	buffer := ReceiveData(conn)
+	if len(buffer) > 1 {
+		arr := strings.Split(string(buffer), "\r\n")
+		if len(arr) > 1 {
+			arr[1] = "Host: " + agencyHost
+			newstr := strings.Join(arr, "\r\n")
+			SendAgencyHost([]byte(newstr), agencyHost, conn)
+		}
+	}
+	conn.Close()
+}
+func SendAgencyHost(data []byte, host string, baseconn net.Conn) {
+	conn, _ := net.Dial("tcp", host)
+	conn.Write(data)
+	time.Sleep(10 * time.Millisecond)
+	bufferHead := ReceiveData(conn)
+	time.Sleep(10 * time.Millisecond)
+	bufferBody := ReceiveData(conn)
+	var buf bytes.Buffer
+	buf.Write(bufferHead)
+	buf.Write(bufferBody)
+	baseconn.Write(buf.Bytes())
+	conn.Close()
+}
 
-	//返回的状态码
-	status := response.StatusCode
+//接收数据统一方法
+func ReceiveData(conn net.Conn) []byte {
+	var buf bytes.Buffer
+	buffer := make([]byte, 8192)
+	for {
+		sizenew, err := conn.Read(buffer)
+		buf.Write(buffer[:sizenew])
+		if err == io.EOF || sizenew < 8192 {
+			break
+		}
+	}
+	return buf.Bytes()
+}
 
-	fmt.Println(status)
+//打印信息统一方法
+func Log(v ...interface{}) {
+	log.Println(v...)
+}
 
-	//fmt.Println("a string flag:",string(*a))
-	//fmt.Println("ins num:",rune(*b))
+//执行错误处理方法
+func CheckError(err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
+		os.Exit(1)
+	}
 }

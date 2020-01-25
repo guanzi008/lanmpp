@@ -1,47 +1,28 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 )
 
-//定义一个字符串变量，并制定默认值以及使用方式
-var a = flag.String("domain", "1q.tn", "域名whois查询")
-
-//定义一个int型字符
-//var b  = flag.Int("ins", 1, "ins nums")
-
 func main() {
-	// 上面定义了两个简单的参数，在所有参数定义生效前，需要使用flag.Parse()来解析参数
-	flag.Parse()
-	client := &http.Client{}
-	// 测试上面定义的函数
-	//	api := "odata.cc"
-	url := string(*a)
-
-	//提交请求
-	reqest, err := http.NewRequest("GET", "http://whois.aite.xyz/?ajax&client&domain="+url, nil)
-	//reqest, err := http.Get("http://whois.aite.xyz/?ajax&client&domain="+url,b)
-
-	if err != nil {
-		panic(err)
+		if len(os.Args) > 1 {
+			req, _ := http.NewRequest("GET", "https://whois.aite.xyz/?ajax&client&domain="+os.Args[1], nil)
+			res, _ := http.DefaultClient.Do(req)
+			defer res.Body.Close()
+			body, _ := ioutil.ReadAll(res.Body)
+			fmt.Println(string(body)) //fmt.Println(res)
+			os.Exit(0)
+		} else {
+			fmt.Println("")
+			os.Exit(0)
+		}
 	}
 
-	//处理返回结果
-	response, _ := client.Do(reqest)
-
-	//将结果定位到标准输出 也可以直接打印出来 或者定位到其他地方进行相应的处理
-	stdout := os.Stdout
-	_, err = io.Copy(stdout, response.Body)
-
-	//返回的状态码
-	status := response.StatusCode
-
-	fmt.Println(status)
-
-	//fmt.Println("a string flag:",string(*a))
-	//fmt.Println("ins num:",rune(*b))
-}
+//名称: api1q
+//ID:114850
+//Token:b6cb4634446b58007d895a3a916ed81d
+//创建时间: 2019-09-04 21:25:22
+//curl -X POST https://dnsapi.cn/Record.Modify -d 'login_token=114850,b6cb4634446b58007d895a3a916ed81d&format=json&domain=1q.tn&record_id=454815654&sub_domain=api&value=3.2.2.2&record_type=A&record_line= 默认'
